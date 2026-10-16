@@ -1,7 +1,7 @@
 name: test-authenticate-deploy-to-ecr
 on:
   push:
-    branch:
+    branches:
       - main
 
 permissions:
