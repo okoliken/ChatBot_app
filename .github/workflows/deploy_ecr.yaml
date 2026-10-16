@@ -6,7 +6,7 @@ on:
 
 permissions:
   id-token: write
-  content: read
+  contents: read
 
 jobs:
   build_and_test: # This test pulls my repo files including the docker image and runs the node npm test
