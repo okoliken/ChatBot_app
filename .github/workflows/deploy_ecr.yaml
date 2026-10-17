@@ -48,6 +48,9 @@ jobs:
          image_url="$REGISTRY/chatbot-repo:${{github.sha}}"
          echo "image=$image_url" >> $GITHUB_OUTPUT
          
+    - name: write_env_file
+      run: echo "ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}" > .env.local
+
     - name: push_to_ecr
       run: | 
           docker build -t ${{steps.image_url.outputs.image}} .
@@ -76,4 +79,3 @@ jobs:
           task-definition: ${{steps.new_task_definition.outputs.task-definition}}
           service: chatbot-ecs
           cluster: Chatbot-cluster
-
