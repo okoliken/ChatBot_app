@@ -12,20 +12,68 @@ jobs:
   build_and_test: # This test pulls my repo files including the docker image and runs the node npm test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t chatbot .
-      - run: docker run -d -p 3000:3000 chatbot
-      - run: |
+     - uses: actions/checkout@v4
+     - run: docker build -t chatbot .
+     - run: docker run -p 3000:3000 -d chatbot
+     - run: |
              sleep 15
              curl --fail http://localhost:3000
    
+  authenticate_push_render_update: # This job will write an OCID token and validate it to sts
+    runs-on: ubuntu-latest
+    needs: build_and_test
+    steps:
 
-#   validates_iam: # This job will write an OCID token and validate it to sts
-#    runs-on: ubuntu-latest
-#    needs: build_and_test
-#    steps:
-#     - uses: aws-actionc/get-aws-credentials@v4
-#          with: 
+    - name: access_repo
+      uses: actions/checkout@v4
 
+    - name: pass_token_get_aws_credentials # Authenticate github
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+          role-to-assume: arn:aws:iam::871145212791:role/github-role
+          aws-region: af-south-1
     
+    - name: testing_role_credentials
+      run: aws sts get-caller-identity
+
+    - name: ecr_login
+      id: Login_ecr
+      uses: aws-actions/amazon-ecr-login@v2
+    
+    - name: set_task_def_url
+      id: image_url
+      env:
+         REGISTRY: ${{steps.Login_ecr.outputs.registry}}
+      run: |
+         image_url="$REGISTRY/chatbot-repo:${{github.sha}}"
+         echo "image=$image_url" >> $GITHUB_OUTPUT
+         
+    - name: push_to_ecr
+      run: | 
+          docker build -t ${{steps.image_url.outputs.image}} .
+          docker push ${{steps.image_url.outputs.image}}
+
+    - name: get_task_definition
+      id: task-def-id
+      run: |
+            aws ecs describe-task-definition \
+            --task-definition chatbot_main \
+            --query taskDefinition > taskDefinition.json
+
+            echo "task_def=taskDefinition.json" >> $GITHUB_OUTPUT
+
+    - name: render_task_definition
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      id: new_task_definition
+      with:
+          task-definition: ${{steps.task-def-id.outputs.task_def}}
+          container-name: chatbot
+          image: ${{steps.image_url.outputs.image}}
+
+    - name: update_task_def_in_ecs
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+      with:
+          task-definition: ${{steps.new_task_definition.outputs.task-definition}}
+          service: chatbot-ecs
+          cluster: Chatbot-cluster
 
